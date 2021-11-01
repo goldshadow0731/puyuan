@@ -1,14 +1,18 @@
+from json import encoder
 from django.conf import settings
+from django.contrib.sessions.models import Session
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import render, resolve_url
 from django.views.decorators.csrf import csrf_exempt
 from user.models import UserProfile, UserSet, Default, Setting
 from body.models import BloodPressure, Weight, BloodSugar, DiaryDiet, UserCare
 from body.models import HbA1c, MedicalInformation, DrugInformation
-from django.utils.timezone import activate
+from django.utils.timezone import make_aware
 from friend.models import Friend
 from datetime import datetime, timedelta
 import json
+import pytz
+import urllib
 
 # Create your views here.
 
@@ -17,25 +21,30 @@ import json
 def user(request):  # 個人資訊設定OK & 個人資訊OK
     if request.method == "PATCH":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
+            data = {
+                row_data.split('=')[0]: row_data.split('=')[1]
+                for row_data in urllib.parse.unquote(str(request.body, encoding='utf-8')).split('&') if 1
+            }
             if UserSet.objects.filter(UUID=request.user.UUID):
                 userset = UserSet.objects.filter(UUID=request.user.UUID)
-                userset.update(name=data["name"])
-                userset.update(birthday=data["birthday"])
-                userset.update(height=data["height"])
-                userset.update(gender=data["gender"])
-                userset.update(FCM_ID=data["fcm_id"])
-                userset.update(address=data["address"])
-                userset.update(weight=float(data["weight"]))
-                user = UserProfile.objects.filter(UUID=request.user.UUID)
-                user.update(phone=data["phone"])
-                user.update(email=data["email"])
+                if "fcm_id" in data:
+                    userset.update(FCM_ID=data["fcm_id"])
+                else:
+                    userset.update(name=data["name"])
+                    userset.update(birthday=data["birthday"])
+                    userset.update(height=data["height"])
+                    userset.update(gender=data["gender"])
+                    userset.update(address=data["address"])
+                    userset.update(weight=float(data["weight"]))
+                    user = UserProfile.objects.filter(UUID=request.user.UUID)
+                    user.update(phone=data["phone"])
+                    user.update(email=data["email"])
             else:
                 raise Exception("NoUser")
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("patch user" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
@@ -57,7 +66,7 @@ def user(request):  # 個人資訊設定OK & 個人資訊OK
                 "birthday": userset.birthday,
                 "height": userset.height,
                 "weight": userset.weight,
-                "gender": int(userset.gender),
+                "gender": int(userset.gender) if userset.gender != None else userset.gender,
                 "address": userset.address,
                 "unread_records": [
                     int(userset.unread_records_one),
@@ -75,28 +84,28 @@ def user(request):  # 個人資訊設定OK & 個人資訊OK
                 "default": {
                     "id": default.id,
                     "user_id": default.UUID,
-                    "sugar_delta_max": int(default.sugar_delta_max),
-                    "sugar_delta_min": int(default.sugar_delta_min),
-                    "sugar_morning_max": int(default.sugar_morning_max),
-                    "sugar_morning_min": int(default.sugar_morning_min),
-                    "sugar_evening_max": int(default.sugar_evening_max),
-                    "sugar_evening_min": int(default.sugar_evening_min),
-                    "sugar_before_max": int(default.sugar_before_max),
-                    "sugar_before_min": int(default.sugar_before_min),
-                    "sugar_after_max": int(default.sugar_after_max),
-                    "sugar_after_min": int(default.sugar_after_min),
-                    "systolic_max": int(default.systolic_max),
-                    "systolic_min": int(default.systolic_min),
-                    "diastolic_max": int(default.diastolic_max),
-                    "diastolic_min": int(default.diastolic_min),
-                    "pulse_max": int(default.pulse_max),
-                    "pulse_min": int(default.pulse_min),
-                    "weight_max": int(default.weight_max),
-                    "weight_min": int(default.weight_min),
-                    "bmi_max": int(default.bmi_max),
-                    "bmi_min": int(default.bmi_min),
-                    "body_fat_max": int(default.body_fat_max),
-                    "body_fat_min": int(default.body_fat_min),
+                    "sugar_delta_max": default.sugar_delta_max,
+                    "sugar_delta_min": default.sugar_delta_min,
+                    "sugar_morning_max": default.sugar_morning_max,
+                    "sugar_morning_min": default.sugar_morning_min,
+                    "sugar_evening_max": default.sugar_evening_max,
+                    "sugar_evening_min": default.sugar_evening_min,
+                    "sugar_before_max": default.sugar_before_max,
+                    "sugar_before_min": default.sugar_before_min,
+                    "sugar_after_max": default.sugar_after_max,
+                    "sugar_after_min": default.sugar_after_min,
+                    "systolic_max": default.systolic_max,
+                    "systolic_min": default.systolic_min,
+                    "diastolic_max": default.diastolic_max,
+                    "diastolic_min": default.diastolic_min,
+                    "pulse_max": default.pulse_max,
+                    "pulse_min": default.pulse_min,
+                    "weight_max": default.weight_max,
+                    "weight_min": default.weight_min,
+                    "bmi_max": default.bmi_max,
+                    "bmi_min": default.bmi_min,
+                    "body_fat_max": default.body_fat_max,
+                    "body_fat_min": default.body_fat_min,
                     "created_at": default.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                     "updated_at": default.updated_at.strftime("%Y-%m-%d %H:%M:%S")
                 },
@@ -117,6 +126,7 @@ def user(request):  # 個人資訊設定OK & 個人資訊OK
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("get user" + " " + "success")
             message = {"status": "0", "user": response}
         finally:
             return JsonResponse(message)
@@ -126,40 +136,46 @@ def user(request):  # 個人資訊設定OK & 個人資訊OK
 def default_value(request):  # 個人預設值OK
     if request.method == "PATCH":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
+            data = {
+                row_data.split('=')[0]: row_data.split('=')[1]
+                for row_data in urllib.parse.unquote(str(request.body, encoding='utf-8')).split('&') if row_data.split("=")[1]
+            }
             if Default.objects.filter(UUID=request.user.UUID):
                 default = Default.objects.filter(UUID=request.user.UUID)
-                ''' 血糖 '''
-                default.update(sugar_delta_max=data["sugar_delta_max"])
-                default.update(sugar_delta_min=data["sugar_delta_min"])
-                default.update(sugar_morning_max=data["sugar_morning_max"])
-                default.update(sugar_morning_min=data["sugar_morning_min"])
-                default.update(sugar_evening_max=data["sugar_evening_max"])
-                default.update(sugar_evening_min=data["sugar_evening_min"])
-                default.update(sugar_before_max=data["sugar_before_max"])
-                default.update(sugar_before_min=data["sugar_before_min"])
-                default.update(sugar_after_max=data["sugar_after_max"])
-                default.update(sugar_after_min=data["sugar_after_min"])
-                ''' 血壓&脈搏 '''
-                default.update(systolic_max=data["systolic_max"])
-                default.update(systolic_min=data["systolic_min"])
-                default.update(diastolic_max=data["diastolic_max"])
-                default.update(diastolic_min=data["diastolic_min"])
-                default.update(pulse_max=data["pulse_max"])
-                default.update(pulse_min=data["pulse_min"])
-                ''' 體重 '''
-                default.update(weight_max=data["weight_max"])
-                default.update(weight_min=data["weight_min"])
-                default.update(bmi_max=data["bmi_max"])
-                default.update(bmi_min=data["bmi_min"])
-                default.update(body_fat_max=data["body_fat_max"])
-                default.update(body_fat_min=data["body_fat_min"])
+                if "sugar_delta_max" in data:
+                    ''' 血糖 '''
+                    default.update(sugar_delta_max=data["sugar_delta_max"])
+                    default.update(sugar_delta_min=data["sugar_delta_min"])
+                    default.update(sugar_morning_max=data["sugar_morning_max"])
+                    default.update(sugar_morning_min=data["sugar_morning_min"])
+                    default.update(sugar_evening_max=data["sugar_evening_max"])
+                    default.update(sugar_evening_min=data["sugar_evening_min"])
+                    default.update(sugar_before_max=data["sugar_before_max"])
+                    default.update(sugar_before_min=data["sugar_before_min"])
+                    default.update(sugar_after_max=data["sugar_after_max"])
+                    default.update(sugar_after_min=data["sugar_after_min"])
+                elif "systolic_max" in data:
+                    ''' 血壓&脈搏 '''
+                    default.update(systolic_max=data["systolic_max"])
+                    default.update(systolic_min=data["systolic_min"])
+                    default.update(diastolic_max=data["diastolic_max"])
+                    default.update(diastolic_min=data["diastolic_min"])
+                    default.update(pulse_max=data["pulse_max"])
+                    default.update(pulse_min=data["pulse_min"])
+                elif "weight_max" in data:
+                    ''' 體重 '''
+                    default.update(weight_max=data["weight_max"])
+                    default.update(weight_min=data["weight_min"])
+                elif "body_fat_max" in data:
+                    ''' 體脂 '''
+                    default.update(body_fat_max=data["body_fat_max"])
+                    default.update(body_fat_min=data["body_fat_min"])
             else:
                 raise Exception("NoUser")
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("patch default_value" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
@@ -169,87 +185,124 @@ def default_value(request):  # 個人預設值OK
 def setting(request):  # 個人設定OK
     if request.method == "PATCH":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
+            data = {
+                row_data.split('=')[0]: row_data.split('=')[1]
+                for row_data in urllib.parse.unquote(str(request.body, encoding='utf-8')).split('&') if 1
+            }
             if Setting.objects.filter(UUID=request.user.UUID):
                 setting = Setting.objects.filter(UUID=request.user.UUID)
-                setting.update(after_recording=data["after_recording"])
-                setting.update(
-                    no_recording_for_a_day=data["no_recording_for_a_day"])
-                setting.update(
-                    over_max_or_under_min=data["over_max_or_under_min"])
-                setting.update(after_meal=data["after_meal"])
-                setting.update(unit_of_sugar=data["unit_of_sugar"])
-                setting.update(unit_of_weight=data["unit_of_weight"])
-                setting.update(unit_of_height=data["unit_of_height"])
+                if "after_recording" in data:
+                    setting.update(after_recording=data["after_recording"])
+                    setting.update(
+                        no_recording_for_a_day=data["no_recording_for_a_day"])
+                    setting.update(
+                        over_max_or_under_min=data["over_max_or_under_min"])
+                elif "after_meal" in data:
+                    setting.update(after_meal=data["after_meal"])
+                    setting.update(unit_of_sugar=data["unit_of_sugar"])
+                    setting.update(unit_of_weight=data["unit_of_weight"])
+                    setting.update(unit_of_height=data["unit_of_height"])
             else:
                 raise Exception("NoUser")
         except Exception as e:
+            print(e)
             message = {"status": "1"}
         else:
+            print("setting" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
 
 
-@csrf_exempt
+@ csrf_exempt
 def blood_pressure(request):  # 上傳血壓測量結果OK
     if request.method == "POST":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
+            data = {
+                row_data.split('=')[0]: row_data.split('=')[1]
+                for row_data in str(request.body, encoding='utf-8').split('&') if row_data.split("=")[1]
+            }
+            data['recorded_at'] = urllib.parse.unquote(data['recorded_at'])
+            data['recorded_at'] = datetime.strptime(
+                data['recorded_at'], "%Y-%m-%d %H:%M:%S")
+            tz = pytz.timezone('Asia/Taipei')
+            data['recorded_at'] = make_aware(data['recorded_at'], tz)
             BloodPressure.objects.create(
-                user_ID=request.user.ID, systolic=data["systolic"], diastolic=data["diastolic"], pulse=data["pulse"], recorded_at=data["recorded_at"])
+                UUID=request.user.UUID, systolic=data["systolic"], diastolic=data["diastolic"], pulse=data["pulse"], recorded_at=data["recorded_at"])
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("blood_pressure" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
 
 
-@csrf_exempt
+@ csrf_exempt
 def weight(request):  # 上傳體重測量結果OK
     if request.method == "POST":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
-            Weight.objects.create(user_ID=request.user.ID, weight=data["weight"], body_fat=data[
+            data = {
+                row_data.split('=')[0]: row_data.split('=')[1]
+                for row_data in str(request.body, encoding='utf-8').split('&') if row_data.split("=")[1]
+            }
+            data['recorded_at'] = urllib.parse.unquote(data['recorded_at'])
+            data['recorded_at'] = datetime.strptime(
+                data['recorded_at'], "%Y-%m-%d %H:%M:%S")
+            tz = pytz.timezone('Asia/Taipei')
+            data['recorded_at'] = make_aware(data['recorded_at'], tz)
+            Weight.objects.create(UUID=request.user.UUID, weight=data["weight"], body_fat=data[
                                   "body_fat"], BMI=data["bmi"], recorded_at=data["recorded_at"])
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("weight" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
 
 
-@csrf_exempt
+@ csrf_exempt
 def blood_sugar(request):  # 上傳血糖OK
     if request.method == "POST":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
+            data = {
+                row_data.split('=')[0]: row_data.split('=')[1]
+                for row_data in str(request.body, encoding='utf-8').split('&') if row_data.split("=")[1]
+            }
+            data['recorded_at'] = urllib.parse.unquote(data['recorded_at'])
+            data['recorded_at'] = datetime.strptime(
+                data['recorded_at'], "%Y-%m-%d %H:%M:%S")
+            tz = pytz.timezone('Asia/Taipei')
+            data['recorded_at'] = make_aware(data['recorded_at'], tz)
             BloodSugar.objects.create(
-                user_ID=request.user.ID, sugar=data["sugar"], timeperiod=data["timeperiod"], recorded_at=data["recorded_at"])
+                UUID=request.user.UUID, sugar=data["sugar"], timeperiod=data["timeperiod"], recorded_at=data["recorded_at"])
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("blood_sugar" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
 
 
-@csrf_exempt
+@ csrf_exempt
 def diet(request):  # 飲食日記OK
     if request.method == "POST":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
-            DiaryDiet.objects.create(user_ID=request.user.ID, description=data["description"], meal=data["meal"], tag=data[
-                "tag[]"], image_count=data["image"], lat=data["lat"], lng=data["lng"], recorded_at=data["recorded_at"])
+            data = {
+                row_data.split('=')[0]: row_data.split('=')[1]
+                for row_data in urllib.parse.unquote(str(request.body, encoding='utf-8')).split('&') if 1
+            }
+            data['recorded_at'] = datetime.strptime(
+                data['recorded_at'], "%Y-%m-%d %H:%M:%S")
+            tz = pytz.timezone('Asia/Taipei')
+            data['recorded_at'] = make_aware(data['recorded_at'], tz)
+            # DiaryDiet.objects.create(UUID=request.user.UUID, description=data["description"], meal=data[
+            #     "meal"], image_count=data["image"], lat=data["lat"], lng=data["lng"], recorded_at=data["recorded_at"])
             image_url = "http://211.23.17.100:3001/diet_1_2020-08-17_11:11:11_0"
         except Exception as e:
+            print(e)
             message = {"status": "1"}
         else:
             message = {"status": "0", "image_url": image_url}
@@ -257,29 +310,30 @@ def diet(request):  # 飲食日記OK
             return JsonResponse(message)
 
 
-@csrf_exempt
+@ csrf_exempt
 def last_upload(request):  # 最後上傳時間OK
     if request.method == "GET":
         try:
             last_upload = {}
             blood_pressure = str(BloodPressure.objects.filter(
-                user_ID=request.user.ID).latest('recorded_at').recorded_at).split("+")[0]
+                UUID=request.user.UUID).latest('recorded_at').recorded_at).split("+")[0]
             last_upload["blood_pressure"] = blood_pressure
 
             weight = str(Weight.objects.filter(
-                user_ID=request.user.ID).latest('recorded_at').recorded_at).split("+")[0]
+                UUID=request.user.UUID).latest('recorded_at').recorded_at).split("+")[0]
             last_upload["weight"] = weight
 
             blood_sugar = str(BloodSugar.objects.filter(
-                user_ID=request.user.ID).latest('recorded_at').recorded_at).split("+")[0]
+                UUID=request.user.UUID).latest('recorded_at').recorded_at).split("+")[0]
             last_upload["sugar"] = blood_sugar
 
             diary_diet = str(DiaryDiet.objects.filter(
-                user_ID=request.user.ID).latest('recorded_at').recorded_at).split("+")[0]
+                UUID=request.user.UUID).latest('recorded_at').recorded_at).split("+")[0]
             last_upload["diet"] = diary_diet
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("last_upload" + " " + "success")
             message = {"status": "0", "last_upload": last_upload}
         finally:
             return JsonResponse(message)
@@ -289,73 +343,109 @@ def last_upload(request):  # 最後上傳時間OK
 def records(request):  # 上一筆紀錄資訊OK & 40.刪除日記記錄OK
     if request.method == "POST":
         try:
+            print(request)
+            print(request.body)
             output = {}
 
             # 血糖
-            blood_sugar = BloodSugar.objects.filter(
-                user_ID=request.user.ID).latest("recorded_at")
-            output["blood_sugars"] = {
-                "id": blood_sugar.id,
-                "user_id": blood_sugar.user_ID,
-                "sugar": blood_sugar.sugar,
-                "timeperiod": blood_sugar.timeperiod,
-                "recorded_at": str(blood_sugar.recorded_at)
-            }
+            if BloodSugar.objects.filter(UUID=request.user.UUID):
+                blood_sugar = BloodSugar.objects.filter(
+                    UUID=request.user.UUID).latest("recorded_at")
+                output["blood_sugars"] = {
+                    "id": blood_sugar.id,
+                    "user_id": blood_sugar.UUID,
+                    "sugar": blood_sugar.sugar,
+                    "timeperiod": blood_sugar.timeperiod,
+                    "recorded_at": str(blood_sugar.recorded_at)
+                }
+            else:
+                output["blood_sugars"] = {
+                    "id": None,
+                    "user_id": None,
+                    "sugar": None,
+                    "timeperiod": None,
+                    "recorded_at": None
+                }
             # 血壓
-            blood_pressures = BloodPressure.objects.filter(
-                user_ID=request.user.ID).latest("recorded_at")
-            output["blood_pressures"] = {
-                "id": blood_pressures.id,
-                "user_id": blood_pressures.user_ID,
-                "systolic": blood_pressures.systolic,
-                "diastolic": blood_pressures.diastolic,
-                "pulse": blood_pressures.pulse,
-                "recorded_at": str(blood_pressures.recorded_at)
-            }
+            if BloodPressure.objects.filter(UUID=request.user.UUID):
+                blood_pressures = BloodPressure.objects.filter(
+                    UUID=request.user.UUID).latest("recorded_at")
+                output["blood_pressures"] = {
+                    "id": blood_pressures.id,
+                    "user_id": blood_pressures.UUID,
+                    "systolic": blood_pressures.systolic,
+                    "diastolic": blood_pressures.diastolic,
+                    "pulse": blood_pressures.pulse,
+                    "recorded_at": str(blood_pressures.recorded_at)
+                }
+            else:
+                output["blood_pressures"] = {
+                    "id": None,
+                    "user_id": None,
+                    "systolic": None,
+                    "diastolic": None,
+                    "pulse": None,
+                    "recorded_at": None
+                }
             # 體重
-            weights = Weight.objects.filter(
-                user_ID=request.user.ID).latest("recorded_at")
-            output["weights"] = {
-                "id": weights.id,
-                "user_id": weights.user_ID,
-                "weight": weights.weight,
-                "body_fat": weights.body_fat,
-                "bmi": weights.BMI,
-                "recorded_at": str(weights.recorded_at)
-            }
 
-            timeperiod_list = ['晨起', '早餐前', '早餐後',
-                               '午餐前', '午餐後', '晚餐前', '晚餐後', '睡前']
+            if Weight.objects.filter(UUID=request.user.UUID):
+                weights = Weight.objects.filter(
+                    UUID=request.user.UUID).latest("recorded_at")
+                output["weights"] = {
+                    "id": weights.id,
+                    "user_id": weights.UUID,
+                    "weight": weights.weight,
+                    "body_fat": weights.body_fat,
+                    "bmi": weights.BMI,
+                    "recorded_at": str(weights.recorded_at)
+                }
+            else:
+                output["weights"] = {
+                    "id": None,
+                    "user_id": None,
+                    "weight": None,
+                    "body_fat": None,
+                    "bmi": None,
+                    "recorded_at": None
+                }
+
+            # timeperiod_list = ['晨起', '早餐前', '早餐後',
+            #                    '午餐前', '午餐後', '晚餐前', '晚餐後', '睡前']
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("post record" + " " + "success")
             message = {"status": "0"}
             message.update(output)
         finally:
             return JsonResponse(message, safe=False)
     elif request.method == "DELETE":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
             # 血糖
-            if data["blood_sugars[]"]:
-                for blood_sugar in data["blood_sugars[]"]:
-                    BloodSugar.objects.filter(id=blood_sugar).delete()
+            if request.GET.getlist("blood_sugars[]"):
+                data_list = request.GET.getlist("blood_sugars[]")
+                for data in data_list:
+                    BloodSugar.objects.filter(id=data).delete()
             # 血壓
-            if data["blood_pressures[]"]:
-                for blood_pressures in data["blood_pressures[]"]:
-                    BloodPressure.objects.filter(id=blood_pressures).delete()
+            if request.GET.getlist("blood_pressures[]"):
+                data_list = request.GET.getlist("blood_pressures[]")
+                for data in data_list:
+                    BloodPressure.objects.filter(id=data).delete()
             # 體重
-            if data["weights[]"]:
-                for weight in data["weights[]"]:
-                    Weight.objects.filter(id=weight).delete()
+            if request.GET.getlist("weights[]"):
+                data_list = request.GET.getlist("weights[]")
+                for data in data_list:
+                    Weight.objects.filter(id=data).delete()
             # 日記
-            if data["diets[]"]:
-                for diet in data["diets[]"]:
-                    DiaryDiet.objects.filter(id=diet).delete()
+            if request.GET.getlist("diets[]"):
+                data_list = request.GET.getlist("diets[]")
+                for data in data_list:
+                    DiaryDiet.objects.filter(id=data).delete()
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("delete record" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
@@ -365,71 +455,65 @@ def records(request):  # 上一筆紀錄資訊OK & 40.刪除日記記錄OK
 def diary(request):  # 日記列表資料OK
     if request.method == "GET":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
-            start_date = datetime.strptime(
-                data["date"], "%Y-%m-%d") + timedelta(hours=8) if "date" in data else datetime.now()
+            data = request.GET["date"]  # str
+            diary_date = datetime.strptime(data, "%Y-%m-%d")
+            tz = pytz.timezone('Asia/Taipei')
+            start_date = make_aware(diary_date, tz)
             end_date = start_date + timedelta(days=1)
             diary = []
+            tz = pytz.timezone('Asia/Taipei')
 
             # 血壓
             blood_pressure_list = BloodPressure.objects.filter(
-                user_ID=request.user.ID, created_at__range=(start_date, end_date))
+                UUID=request.user.UUID, created_at__range=(start_date, end_date))
             if blood_pressure_list:
                 for blood_pressure in blood_pressure_list:
-                    diary.append(
-                        {
-                            "id": blood_pressure.id,
-                            "user_id": blood_pressure.user_ID,
-                            "systolic": blood_pressure.systolic,
-                            "diastolic": blood_pressure.diastolic,
-                            "pulse": blood_pressure.pulse,
-                            "recorded_at": blood_pressure.recorded_at.strftime('%Y-%m-%d %H:%M:%S'),
-                            "type": "blood_pressure"
-                        }
-                    )
-
+                    diary.append({
+                        "id": blood_pressure.id,
+                        "user_id": blood_pressure.UUID,
+                        "systolic": blood_pressure.systolic,
+                        "diastolic": blood_pressure.diastolic,
+                        "pulse": int(blood_pressure.pulse),
+                        "recorded_at": blood_pressure.recorded_at.astimezone(tz).strftime('%Y-%m-%d %H:%M:%S'),
+                        "type": "blood_pressure"
+                    })
             # 體重
             weight_list = Weight.objects.filter(
-                user_ID=request.user.ID, created_at__range=(start_date, end_date))
+                UUID=request.user.UUID, created_at__range=(start_date, end_date))
             if weight_list:
                 for weight in weight_list:
-                    diary.append(
-                        {
-                            "id": weight.id,
-                            "user_id": weight.user_ID,
-                            "weight": weight.weight,
-                            "body_fat": weight.body_fat,
-                            "bmi": weight.BMI,
-                            "recorded_at": weight.recorded_at.strftime('%Y-%m-%d %H:%M:%S'),
-                            "type": "weight"
-                        }
-                    )
+                    diary.append({
+                        "id": weight.id,
+                        "user_id": weight.UUID,
+                        "weight": weight.weight,
+                        "body_fat": weight.body_fat,
+                        "bmi": weight.BMI,
+                        "recorded_at": weight.recorded_at.astimezone(tz).strftime('%Y-%m-%d %H:%M:%S'),
+                        "type": "weight"
+                    })
 
             # 血糖
             blood_sugar_list = BloodSugar.objects.filter(
-                user_ID=request.user.ID, created_at__range=(start_date, end_date))
+                UUID=request.user.UUID, created_at__range=(start_date, end_date))
             if blood_sugar_list:
                 for blood_sugar in blood_sugar_list:
-                    diary.append(
-                        {
-                            "id": blood_sugar.id,
-                            "user_id": blood_sugar.user_ID,
-                            "sugar": blood_sugar.sugar,
-                            "timeperiod": blood_sugar.timeperiod,
-                            "recorded_at": blood_sugar.recorded_at.strftime('%Y-%m-%d %H:%M:%S'),
-                            "type": "blood_sugar"
-                        }
-                    )
+                    diary.append({
+                        "id": blood_sugar.id,
+                        "user_id": blood_sugar.UUID,
+                        "sugar": int(blood_sugar.sugar),
+                        "timeperiod": int(blood_sugar.timeperiod),
+                        "recorded_at": blood_sugar.recorded_at.astimezone(tz).strftime('%Y-%m-%d %H:%M:%S'),
+                        "type": "blood_sugar"
+                    })
 
             # 日記
             diet_list = DiaryDiet.objects.filter(
-                user_ID=request.user.ID, created_at__range=(start_date, end_date))
+                UUID=request.user.UUID, created_at__range=(start_date, end_date))
             if diet_list:
                 for diet in diet_list:
                     r = {
                         "id": diet.id,
-                        "user_id": diet.user_ID,
+                        "user_id": diet.UUID,
                         "description": diet.description,
                         "meal": diet.meal,
                         "tag": diet.tag,
@@ -438,13 +522,13 @@ def diary(request):  # 日記列表資料OK
                             "lat": diet.lat,
                             "lng": diet.lng
                         },
-                        "recorded_at": diet.recorded_at.strftime('%Y-%m-%d %H:%M:%S'),
+                        "recorded_at": diet.recorded_at.astimezone(tz).strftime('%Y-%m-%d %H:%M:%S'),
                         "type": "diet"
                     }
 
                     # 關懷諮詢
                     user_care = UserCare.objects.filter(
-                        reply_ID=request.user.ID, created_at__range=(start_date, end_date))
+                        UUID=request.user.UUID, created_at__range=(start_date, end_date))
                     if user_care:
                         r["reply"] = user_care.latest("updated_at").message
 
@@ -452,6 +536,7 @@ def diary(request):  # 日記列表資料OK
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("diary" + " " + "success")
             message = {"status": "0", "diary": diary}
         finally:
             return JsonResponse(message)
@@ -468,7 +553,7 @@ def care(request):  # 發送關懷諮詢OK & 獲取關懷諮詢OK
             if friend_list:
                 time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 for friend in friend_list:
-                    UserCare.objects.create(user_ID=request.user.ID, member_ID=friend.friend_type,
+                    UserCare.objects.create(UUID=request.user.UUID, member_ID=friend.friend_type,
                                             reply_ID=friend.relation_ID, message=data["message"], created_at=time, updated_at=time)
 
             friend_list = Friend.objects.filter(
@@ -476,11 +561,12 @@ def care(request):  # 發送關懷諮詢OK & 獲取關懷諮詢OK
             if friend_list:
                 time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 for friend in friend_list:
-                    UserCare.objects.create(user_ID=request.user.ID, member_ID=friend.friend_type,
+                    UserCare.objects.create(UUID=request.user.UUID, member_ID=friend.friend_type,
                                             reply_ID=friend.user_ID, message=data["message"], created_at=time, updated_at=time)
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("post care" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
@@ -504,6 +590,7 @@ def care(request):  # 發送關懷諮詢OK & 獲取關懷諮詢OK
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("get care" + " " + "success")
             message = {"status": "0", "cares": cares}
         finally:
             return JsonResponse(message)
@@ -515,13 +602,13 @@ def a1c(request):  # 糖化血色素OK & 送糖化血色素OK & 刪除糖化血�
         try:
             a1cs = []
 
-            user_alc_list = HbA1c.objects.filter(user_ID=request.user.ID)
+            user_alc_list = HbA1c.objects.filter(UUID=request.user.UUID)
             if user_alc_list:
                 for user_alc in user_alc_list:
                     a1cs.append(
                         {
                             "id": user_alc.id,
-                            "user_id": user_alc.user_ID,
+                            "user_id": user_alc.UUID,
                             "a1c": user_alc.a1c,
                             "recorded_at": user_alc.recorded_at.strftime('%Y-%m-%d %H:%M:%S'),
                             "created_at": user_alc.created_at.strftime('%Y-%m-%d %H:%M:%S'),
@@ -531,35 +618,43 @@ def a1c(request):  # 糖化血色素OK & 送糖化血色素OK & 刪除糖化血�
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("get a1c" + " " + "success")
             message = {"status": "0", "a1cs": a1cs}
         finally:
             return JsonResponse(message)
     elif request.method == "POST":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
+            data = {
+                row_data.split('=')[0]: row_data.split('=')[1]
+                for row_data in urllib.parse.unquote(str(request.body, encoding='utf-8')).split('&') if row_data.split("=")[1]
+            }
+            data['recorded_at'] = datetime.strptime(
+                data['recorded_at'], "%Y-%m-%d %H:%M:%S")
+            tz = pytz.timezone('Asia/Taipei')
+            data['recorded_at'] = make_aware(data['recorded_at'], tz)
             a1c = data["a1c"]
             recorded_at = data["recorded_at"]
 
-            HbA1c.objects.create(user_ID=request.user.ID,
+            HbA1c.objects.create(UUID=request.user.UUID,
                                  a1c=a1c, recorded_at=recorded_at)
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("post a1c" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
     elif request.method == "DELETE":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
-            if data["ids[]"]:
-                for ID in data["ids[]"]:
+            print(request)
+            if request.GET.getlist("ids[]"):
+                for id in request.GET.getlist("ids[]"):
                     HbA1c.objects.filter(
-                        id=ID, user_ID=request.user.ID).delete()
+                        id=id, UUID=request.user.UUID).delete()
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("delete a1c" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
@@ -571,13 +666,13 @@ def medical(request):  # 就醫資訊OK & 更新就醫資訊OK
         try:
             medical_info = []
 
-            if MedicalInformation.objects.filter(user_ID=request.user.ID):
+            if MedicalInformation.objects.filter(UUID=request.user.UUID):
                 medical = MedicalInformation.objects.get(
-                    user_ID=request.user.ID)
+                    UUID=request.user.UUID)
                 medical_info.append(
                     {
                         "id": medical.id,
-                        "user_id": medical.user_ID,
+                        "user_id": medical.UUID,
                         "diabetes_type": medical.diabetes_type,
                         "oad": int(medical.oad),
                         "insulin": int(medical.insulin),
@@ -594,22 +689,25 @@ def medical(request):  # 就醫資訊OK & 更新就醫資訊OK
             return JsonResponse(message)
     elif request.method == "PATCH":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
+            data = {
+                row_data.split('=')[0]: row_data.split('=')[1]
+                for row_data in urllib.parse.unquote(str(request.body, encoding='utf-8')).split('&') if 1
+            }
             diabetes_type = data["diabetes_type"]
             oad = data["oad"]
             insulin = data["insulin"]
             anti_hypertensives = data["anti_hypertensives"]
 
-            if MedicalInformation.objects.filter(user_ID=request.user.ID):
-                MedicalInformation.objects.filter(user_ID=request.user.ID).update(
+            if MedicalInformation.objects.filter(UUID=request.user.UUID):
+                MedicalInformation.objects.filter(UUID=request.user.UUID).update(
                     diabetes_type=diabetes_type, oad=oad, insulin=insulin, anti_hypertensives=anti_hypertensives)
             else:
                 MedicalInformation.objects.create(
-                    user_ID=request.user.ID, diabetes_type=diabetes_type, oad=oad, insulin=insulin, anti_hypertensives=anti_hypertensives)
+                    UUID=request.user.UUID, diabetes_type=diabetes_type, oad=oad, insulin=insulin, anti_hypertensives=anti_hypertensives)
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("patch medical" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
@@ -621,13 +719,13 @@ def drug(request):  # 藥物資訊OK & 上傳藥物資訊OK & 刪除藥物資訊
         try:
             drug_useds = []
 
-            drug_list = DrugInformation.objects.filter(user_ID=request.user.ID)
+            drug_list = DrugInformation.objects.filter(UUID=request.user.UUID)
             if drug_list:
                 for drug in drug_list:
                     drug_useds.append(
                         {
                             "id": drug.id,
-                            "user_id": drug.user_ID,
+                            "user_id": drug.UUID,
                             "type": int(drug.drug_type),
                             "name": drug.name,
                             "recorded_at": drug.recorded_at.strftime('%Y-%m-%d %H:%M:%S')
@@ -636,36 +734,67 @@ def drug(request):  # 藥物資訊OK & 上傳藥物資訊OK & 刪除藥物資訊
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("get drug" + " " + "success")
             message = {"status": "0", "drug_useds": drug_useds}
         finally:
             return JsonResponse(message)
     elif request.method == "POST":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
+            data = {
+                row_data.split('=')[0]: row_data.split('=')[1]
+                for row_data in urllib.parse.unquote(str(request.body, encoding='utf-8')).split('&') if row_data.split("=")[1]
+            }
+            data['recorded_at'] = datetime.strptime(
+                data['recorded_at'], "%Y-%m-%d %H:%M:%S")
+            tz = pytz.timezone('Asia/Taipei')
+            data['recorded_at'] = make_aware(data['recorded_at'], tz)
             drug_type = data["type"]
             name = data["name"]
             recorded_at = data["recorded_at"]
 
             DrugInformation.objects.create(
-                user_ID=request.user.ID, drug_type=drug_type, name=name, recorded_at=recorded_at)
+                UUID=request.user.UUID, drug_type=drug_type, name=name, recorded_at=recorded_at)
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("post drug" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
     elif request.method == "DELETE":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
-            if data["ids[]"]:
-                for ID in data["ids[]"]:
+            print(request)
+            if request.GET.getlist("ids[]"):
+                for ID in request.GET.getlist("ids[]"):
                     DrugInformation.objects.filter(
-                        id=ID, user_ID=request.user.ID).delete()
+                        id=ID, UUID=request.user.UUID).delete()
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("delete" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
+
+
+@csrf_exempt
+def badge(request):  # 39.更新badge
+    message = {"status": "1"}
+    try:
+        s = Session.objects.get(
+            pk=request.headers.get('Authorization', '')[7:]).get_decoded()
+        user = UserSet.objects.get(id=s['_auth_user_id'])
+        if request.method == 'PUT':
+            data = request.body.decode("utf-8")
+            data = {
+                i.split('=')[0]: i.split('=')[1]
+                for i in data.replace('%40', '@').split('&') if i.split('=')[1]
+            }
+            if 'badge' in data:
+                user.badge = data['badge']
+                user.save()
+                status = {"status": "0"}
+    except:
+        pass
+    # print("badge" + " " + "success")
+    return JsonResponse(message)

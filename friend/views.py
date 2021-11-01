@@ -20,6 +20,7 @@ def code(request):  # 獲取控糖團邀請碼OK
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("friend code" + " " + "success")
             message = {"status": "0", "invite_code": userset.invite_code}
         finally:
             return JsonResponse(message)
@@ -50,7 +51,7 @@ def list(request):  # 控糖團列表OK
                             "group": friend_set.group,
                             "birthday": friend_set.birthday,
                             "height": friend_set.height,
-                            "gender": int(friend_set.gender),
+                            "gender": int(friend_set.gender) if friend_set.gender != None else friend_set.gender,
                             "verified": int(friend_set.verified),
                             "privacy_policy": int(friend_set.privacy_policy),
                             "must_change_password": int(friend_set.must_change_password),
@@ -81,7 +82,7 @@ def list(request):  # 控糖團列表OK
                             "group": friend_set.group,
                             "birthday": friend_set.birthday,
                             "height": friend_set.height,
-                            "gender": int(friend_set.gender),
+                            "gender": int(friend_set.gender) if friend_set.gender != None else friend_set.gender,
                             "verified": int(friend_set.verified),
                             "privacy_policy": int(friend_set.privacy_policy),
                             "must_change_password": int(friend_set.must_change_password),
@@ -132,7 +133,7 @@ def requests(request):  # 獲取控糖團邀請OK
                                 "group": invite_friend_set.group,
                                 "birthday": invite_friend_set.birthday,
                                 "height": invite_friend_set.height,
-                                "gender": int(invite_friend_set.gender),
+                                "gender": int(invite_friend_set.gender) if invite_friend_set.gender != None else invite_friend_set.gender,
                                 "verified": int(invite_friend_set.verified),
                                 "privacy_policy": int(invite_friend_set.privacy_policy),
                                 "must_change_password": int(invite_friend_set.must_change_password),
@@ -145,6 +146,7 @@ def requests(request):  # 獲取控糖團邀請OK
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("friend request" + " " + "success")
             message = {"status": "0", "requests": requests_data}
         finally:
             return JsonResponse(message)
@@ -154,15 +156,14 @@ def requests(request):  # 獲取控糖團邀請OK
 def send(request):  # 送出控糖團邀請OK
     if request.method == "POST":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
+            data = request.POST.dict()
             friend_type = data["type"]
             invite_code = data["invite_code"]
 
             if UserSet.objects.filter(invite_code=invite_code):
                 friend_set = UserSet.objects.get(invite_code=invite_code)
                 friend_profile = UserProfile.objects.get(UUID=friend_set.UUID)
-                if not (Friend.objects.filter(user_ID=request.user.ID, relation_ID=friend_profile.ID) or Friend.objects.filter(user_ID=friend_profile.ID, relation_ID=request.user.ID)):
+                if not (Friend.objects.filter(user_ID=request.user.ID, relation_ID=friend_profile.ID, status=1) or Friend.objects.filter(user_ID=friend_profile.ID, relation_ID=request.user.ID, status=1)):
                     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     Friend.objects.create(user_ID=request.user.ID, relation_ID=friend_profile.ID,
                                           friend_type=friend_type, status=0, read=False, created_at=time, updated_at=time)
@@ -216,6 +217,7 @@ def refuse(request, friend_invite_id):  # 拒絕控糖團邀請OK
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("friend refuse" + " " + "success")
             message = {"status": "0"}
         finally:
             return JsonResponse(message)
@@ -235,12 +237,11 @@ def remove(request, friend_id=None):  # 刪除控糖團邀請OK & 刪除更多�
         else:
             message = {"status": "0"}
         finally:
+            print("friend get remove" + " " + "success")
             return JsonResponse(message)
     elif request.method == "DELETE":
         try:
-            data = json.loads((request.body).decode(
-                'utf8'))  # Bytes -> Json -> dict
-            IDs = data["ids[]"]
+            IDs = request.GET.getlist('ids[]')
 
             for ID in IDs:
                 # 邀請人
@@ -313,6 +314,7 @@ def results(request):  # 控糖團結果OK
         except Exception as e:
             message = {"status": "1"}
         else:
+            print("friend result" + " " + "success")
             message = {"status": "0", "results": invite_results}
         finally:
             return JsonResponse(message)

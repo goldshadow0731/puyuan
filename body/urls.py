@@ -19,47 +19,49 @@ from . import views
 
 urlpatterns = [
     # ========== 個人資訊設定 ==========
-    # 7.個人資訊設定OK
-    # 12.個人資訊OK
+    # 7.個人資訊設定OK => OK
+    # 12.個人資訊OK => OK
     path('', views.user),
-    # 11.個人預設值OK
+    # 11.個人預設值OK => OK
     path('default/', views.default_value),
-    # 35.個人設定OK
+    # 35.個人設定OK => OK
     path('setting/', views.setting),
     # ========== 測量上傳 ==========
-    # 8.上傳血壓測量結果OK
+    # 8.上傳血壓測量結果OK => OK
     path("blood/pressure/", views.blood_pressure),
-    # 9.上傳體重測量結果OK
+    # 9.上傳體重測量結果OK => OK
     path("weight/", views.weight),
-    # 10.上傳血糖OK
+    # 10.上傳血糖OK => OK
     path("blood/sugar/", views.blood_sugar),
     # 25.最後上傳時間OK
     path("last-upload/", views.last_upload),
-    # 44.上一筆紀錄資訊OK
+    # 44.上一筆紀錄資訊OK => OK
+    # 40.刪除日記記錄OK => OK
     path("records/", views.records),
     # ========== 日記 ==========
-    # 14.日記列表資料OK
+    # 14.日記列表資料OK => OK
     path("diary/", views.diary),
     # 15.飲食日記OK
     path("diet/", views.diet),
-    # 40.刪除日記記錄OK
-    # path("records/", views.records), -> 44.上一筆紀錄資訊
     # ========== 關懷資訊 ==========
     # 27.獲取關懷諮詢OK
     # 28.發送關懷諮詢OK
     path("care/", views.care),
     # ========== 糖化血色素 ==========
-    # 32.糖化血色素OK
-    # 33.送糖化血色素OK
-    # 34.刪除糖化血色素OK
+    # 32.糖化血色素OK => OK
+    # 33.送糖化血色素OK => OK
+    # 34.刪除糖化血色素OK => OK
     path("a1c/", views.a1c),
     # ========== 就醫資訊 ==========
-    # 30.就醫資訊OK
-    # 31.更新就醫資訊OK
+    # 30.就醫資訊OK =>
+    # 31.更新就醫資訊OK => OK
     path("medical/", views.medical),
     # ========== 藥物資訊 ==========
-    # 41.藥物資訊OK
-    # 42.上傳藥物資訊OK
-    # 43.刪除藥物資訊OK
+    # 41.藥物資訊OK => OK
+    # 42.上傳藥物資訊OK => OK
+    # 43.刪除藥物資訊OK => OK
     path("drug-used/", views.drug),
+    # ========== badge ==========
+    # 39.更新badge
+    path('badge/', views.badge),
 ]

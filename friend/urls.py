@@ -19,7 +19,7 @@ from . import views
 
 urlpatterns = [
     # ========== 控糖團好友 ==========
-    # 16.獲取控糖團邀請碼OK
+    # 16.獲取控糖團邀請碼OK => OK
     path("code/", views.code),
     # 17.控糖團列表OK
     path("list/", views.list),
